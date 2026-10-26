@@ -1,17 +1,68 @@
 from multiprocessing import Process
 import time
-
+import asyncio
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     ContextTypes,
-    MessageHandler
+    MessageHandler,
+    filters
 )
+from google import genai
+
 import os
 from dotenv import load_dotenv
 
+
 load_dotenv()
+
+apiGoogle=os.getenv("apiGoogle")
+#Paso1. configurar gemini
+cliente=genai.Client(api_key=apiGoogle)
+modelo="gemini-3.5-flash-lite"
+#Paso2. Configurar las funcion de informacion de conocimiento
+def cargarInformacion():
+    try: 
+        with open("chat/informacion.txt","r",encoding="utf-8") as archivo:
+            return archivo.read()
+    except FileNotFoundError:
+        return ""
+
+
+
+async def responder(update:Update,context:ContextTypes.DEFAULT_TYPE):
+    pregunta=update.message.text
+    contexto=cargarInformacion()
+    if not contexto.strip():
+        await update.message.reply_text("Error al activar la base de conocimiento...")
+        return
+    mensajeEspera=await update.message.reply_text("Analizando...")
+    try:
+        indicacion=f"""
+            Debes responder de forma cordial las consultas de los usuarios
+            Solo debes utilizar como fuente principal el siguiente archivo: 
+            {contexto}
+
+            Reglas:
+            1. Responde solo basandote en el material proporcianado
+            2. Si no tienes informacion suficiente puedes buscarlo en tu base de datos
+            pero sin salir del tema especifico para tu busqueda
+            3. Usa mensajes cortos, respondiendo los mas humano posible como un asistente de atencion al cliente
+            4. recepciona y solicita datos para registro de los interesados puedes ser persuasvio
+
+            Pregunta de la persona: {pregunta}
+        """
+        respuesta=await asyncio.to_thread(
+            cliente.models.generate_content,
+                model=modelo,
+                contents=indicacion
+        )
+        texto=respuesta.text or ("Error al procesar")
+        for inicio in range(0,len(texto),2000):
+            await update.message.reply_text(texto[inicio:inicio+2000])
+    except Exception as error:
+        print("Error al conectar",error)
 
 async def imagenEnviar(update:Update,context:ContextTypes.DEFAULT_TYPE):
     with open("telegram.jpg","rb") as imagen:
@@ -94,6 +145,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("imagen",imagenEnviar))
     app.add_handler(CommandHandler("practica",pdfEnviar))
     app.add_handler(CommandHandler("musica",audioEnviar))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,responder))
 
     print(" Bot iniciado...")
     print("Esperando comandos...")
