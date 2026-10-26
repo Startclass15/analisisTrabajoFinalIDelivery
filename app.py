@@ -8,6 +8,8 @@ import os
 import time
 from dotenv import load_dotenv
 
+
+
 # PASO 2. CARGAR LAS VARIABLES DE ENTORNO
 load_dotenv()
 
@@ -168,7 +170,7 @@ if __name__ == "__main__":
     socket.run(
         app,
         host="0.0.0.0",
-        port=5000,
+        port=int(os.getenv("PORT",5000)),
         debug=True,
         use_reloader=False
     )
